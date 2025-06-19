@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: permission-backend-postgres
+    environment:
+      POSTGRES_DB: permissions
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pass
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./scripts:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+
+  nats:
+    image: nats:latest
+    container_name: permission-backend-nats
+    command: ["-js", "--store_dir", "/data/jetstream"]
+    ports:
+      - '4222:4222'
+      - '6222:6222'
+      - '8222:8222'
+    volumes:
+      - nats_data:/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: permission-backend-app
+    depends_on:
+      - postgres
+      - nats
+    environment:
+      NATS_URL:     nats://nats:4222
+      POSTGRES_URL: postgres://postgres:pass@postgres:5432/permissions
+      KV_BUCKET:    permissions_cache
+    command: npm start
+
+volumes:
+  pgdata:
+  nats_data:
