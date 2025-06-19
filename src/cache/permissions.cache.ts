@@ -1,12 +1,13 @@
 import { JSONCodec, NatsConnection } from 'nats';
 import { KV_BUCKET } from '../config';
+import { Permission } from '../types';
 
-const codec = JSONCodec<any[]>();
+const codec = JSONCodec<Permission[]>();
 
 export async function getCachedPermissions(
   nc: NatsConnection,
   apiKey: string
-): Promise<any[] | null> {
+): Promise<Permission[] | null> {
   const js = nc.jetstream();
   const kv = await js.views.kv(KV_BUCKET);
 
@@ -19,10 +20,11 @@ export async function getCachedPermissions(
 export async function setCachedPermissions(
   nc: NatsConnection,
   apiKey: string,
-  perms: any[]
+  perms: Permission[]
 ): Promise<void> {
   const js = nc.jetstream();
   const kv = await js.views.kv(KV_BUCKET);
 
   await kv.put(apiKey, codec.encode(perms));
 }
+

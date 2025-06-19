@@ -3,59 +3,74 @@ import assert from 'assert';
 import { PermissionsClient } from './src/library/client';
 import { NATS_URL } from './src/config';
 
-type Permission = { apiKey: string; module: string; action: string; };
+import { Permission } from './src/types/permission';
+import {
+  GrantRequest,
+  CheckRequest,
+  ListRequest,
+  RevokeRequest,
+  StatusResponse,
+  CheckResponse,
+  ListResponse,
+  ErrorPayload,
+} from './src/types';
+
+function ensureNoError<T extends object>(res: T | ErrorPayload): asserts res is T {
+  if ('error' in res) {
+    throw new Error(`${res.error.code}: ${res.error.message}`);
+  }
+}
 
 async function main() {
-
-
   const client = new PermissionsClient(NATS_URL);
   await client.init();
 
   const apiKey = 'test-key';
-  const perm = { module: 'm', action: 'a' } as Omit<Permission, 'apiKey'>;
+  type M = 'TRADES';
+  const perm: Permission<M> = {
+    module: 'TRADES',
+    action: 'create',
+  };
 
   await runStep('grant', async () => {
-    const res = await client.grant({ apiKey, ...perm });
-    console.log('  Response:', res);
-    assert.strictEqual((res as any).status, 'ok');
+    const res = await client.grant({ apiKey, ...perm } as GrantRequest<M>);
+    ensureNoError<StatusResponse>(res);
+    assert.strictEqual(res.status, 'ok');
   });
 
   await runStep('check granted', async () => {
-    const res = await client.check({ apiKey, ...perm });
-    console.log('Response:', res);
-    assert.strictEqual((res as any).allowed, true);
+    const res = await client.check({ apiKey, ...perm } as CheckRequest<M>);
+    ensureNoError<CheckResponse>(res);
+    assert.strictEqual(res.allowed, true);
   });
 
   await runStep('list', async () => {
-    const res = await client.list({ apiKey });
-    console.log('Response:', res);
-    const list = (res as any).permissions as { module: string; action: string }[];
-    assert.ok(list.some(p => p.module === perm.module && p.action === perm.action));
+    const res = await client.list({ apiKey } as ListRequest);
+    ensureNoError<ListResponse>(res);
+    assert.ok(
+      res.permissions.some(p => p.module === perm.module && p.action === perm.action)
+    );
   });
 
   await runStep('revoke', async () => {
-    const res = await client.revoke({ apiKey, ...perm });
-    console.log('  Response:', res);
-    assert.strictEqual((res as any).status, 'ok');
+    const res = await client.revoke({ apiKey, ...perm } as RevokeRequest<M>);
+    ensureNoError<StatusResponse>(res);
+    assert.strictEqual(res.status, 'ok');
   });
 
   await runStep('Revoked', async () => {
-    const res = await client.check({ apiKey, ...perm });
-    console.log('  Response:', res);
-    assert.strictEqual((res as any).allowed, false);
+    const res = await client.check({ apiKey, ...perm } as CheckRequest<M>);
+    ensureNoError<CheckResponse>(res);
+    assert.strictEqual(res.allowed, false);
   });
 
-  console.log('\nAll tests passed');
 }
 
 async function runStep(name: string, fn: () => Promise<void>) {
-  process.stdout.write(`Step "${name}": `);
+  process.stdout.write(`Step ${name}`);
   try {
     await fn();
-    console.log('ok');
-  } catch (error) {
-    console.log('failed');
-    console.error(`Error "${name}":`, error);
+  } catch (err) {
     process.exit(1);
   }
 }
